@@ -1,0 +1,106 @@
+---
+title: "PCC conversion"
+output: html_document
+author: "Yefeng Yang and Shinichi Nakagawa"
+date: '2023-02-24'
+---
+
+# custom function
+https://github.com/daniel1noble/metaAidR/blob/master/R/es_stat.R
+https://cran.r-project.org/web/packages/esc/esc.pdf
+https://bookdown.org/MathiasHarrer/Doing_Meta_Analysis_in_R/es-calc.html
+
+```{r}
+# function to calculate  
+smd <- function(m1, m2,  sd1, sd2, n1, n2, type = c("d", "g")){
+	if(type == "g"){
+	J <- 1 - (3 / ((4 * (n1 + n2 - 2)) -1))
+	sd_pool<- (((n1 - 1) * (sd1^2)) + ((n2 - 1) * (sd2^2)))/(n1 + n2 - 2)
+	h_g <- ((m1 - m2) / sqrt(sd_pool))*J
+	}
+
+	if(type == "d"){
+	sd_pool<- (((n1 - 1) * (sd1^2)) + ((n2 - 1) * (sd2^2)))/(n1 + n2 - 2)
+	h_g <- ((m1 - m2) / sqrt(sd_pool))
+	}
+return(h_g)
+}
+
+var_smd <- function(smd, n1, n2, type = c("d", "g")){
+	if(type == "g"){
+	J <- 1 - (3 / ((4 * (n1 + n2 - 2)) -1))
+	vg <- ((n1 + n2)/(n1 * n2)) + ((smd^2)/(2 * (n1 + n2 - 2)))
+	v <- vg * (J^2)
+	}
+
+	if(type == "d"){
+	v <- ((n1 + n2)/(n1 * n2)) + ((smd^2)/(2 * (n1 + n2 - 2)))
+	}
+return(v)
+}
+
+# calculate the pooled standard deviation
+sp <- function(sd1, sd2, n1, n2) {
+ sp <- sqrt(((n1 - 1) * sd1^2 + (n2 - 1) * sd2^2) / (n1 + n2 - 2))
+ return(sp)
+} 
+
+```
+
+
+# SMD with descriptive statistics
+
+```{r}
+library(here)
+library(dplyr)
+
+ft037_raw <- read.csv(here("data","ft037_raw.csv")) 
+ft037_raw <- ft037_raw[-1]
+
+# calculate SMD and its sampling variance with small sample adjustment
+ft037_raw <- ft037_raw %>% mutate(es = smd(m1=T_mean, m2=C_mean, sd1=T_sd, sd2=C_sd, n1=T_n, n2=C_n, type = "g"), var = var_smd(es, n1=T_n, n2=C_n, type = "g"))
+
+# recover t and df
+ft037_raw <- ft037_raw %>% mutate(t = es/sqrt(var), df = T_n + C_n - 2)
+
+# alternatively, we can calculate t according to its definition in two-sample test
+# calculate the standard error of the difference between the means
+ft037_raw <- ft037_raw %>% mutate(sp = sp(sd1=T_sd, sd2=C_sd, n1=T_n, n2=C_n), # calculate the pooled standard deviation
+                                  se = sp * sqrt(1/T_n + 1/C_n), # calculate the standard error of the difference between the means # https://www.statology.org/two-sample-t-test/
+                                  t2 = (T_sd - C_sd) / se, # calculate the t-value 
+                                  df2 = T_n + C_n - 2 # calculate the degrees of freedom
+                                  )
+
+
+```
+
+
+# SMD without descriptive statistics
+
+```{r}
+ft056_processed <- read.csv(here("data","ft056_processed.csv")) 
+ft056_processed <- ft056_processed[-1]
+
+# recover t and df, assuming equal sample size between two groups
+ft056_processed <- ft056_processed %>% mutate(t = es/sqrt(var), df = (8 + es^2)/(4*var) - 2)
+```
+
+
+# Zr
+
+```{r}
+ft012 <- read.csv(here("data","ft012.csv")) 
+ft012  <- ft012[-1]
+
+# recover t and df
+ft056_processed <- ft056_processed %>% mutate(t = es/sqrt(var), df = 1/var + 3 - 2)
+
+# alternatively, convert Zr into r and then calculate t
+ft056_processed <- ft056_processed %>% mutate(r = (exp(2*es) - 1)/(1 + exp(2*es)),
+                                              es2 = 0.5*log((1+r)/(1-r)),
+                                              N = 1/var + 3,
+                                              var_r = (1 - r^2)^2 / (N - 1),
+                                              t2 = r / sqrt(var_r) * sqrt(N - 2), df2 = N - 2) 
+
+
+```
