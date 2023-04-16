@@ -111,7 +111,7 @@ ft056_processed <- ft056_processed %>%
          N = 1/var + 3) %>%
   mutate(var_r = (1 - r^2)^2 / (N - 1),
          t2 = r / sqrt(var_r) * sqrt(N - 2), 
-         df2 = N - 2 )
+         df2 = N - 2)
                                               
 
 ```
@@ -123,6 +123,7 @@ ft056_processed <- ft056_processed %>%
 
 
 # Ignore the following stuff
+Using R to identify author clusters
 
 ```{r}
 library(igraph)
