@@ -5,76 +5,32 @@ author: "Yefeng Yang and Shinichi Nakagawa"
 date: '2023-02-24'
 ---
 
-# custom function
-https://github.com/daniel1noble/metaAidR/blob/master/R/es_stat.R
-https://cran.r-project.org/web/packages/esc/esc.pdf
-https://bookdown.org/MathiasHarrer/Doing_Meta_Analysis_in_R/es-calc.html
+# Resources
+https://easystats.github.io/effectsize/reference/t_to_r.html
+https://onlinelibrary.wiley.com/doi/full/10.4073/cmpn.2016.3
 
-```{r}
-# function to calculate  
-smd <- function(m1, m2,  sd1, sd2, n1, n2, type = c("d", "g")){
-	if(type == "g"){
-	J <- 1 - (3 / ((4 * (n1 + n2 - 2)) -1))
-	sd_pool<- (((n1 - 1) * (sd1^2)) + ((n2 - 1) * (sd2^2)))/(n1 + n2 - 2)
-	h_g <- ((m1 - m2) / sqrt(sd_pool))*J
-	}
+# Raw data (SMD and lnRR) with descriptive statistics
 
-	if(type == "d"){
-	sd_pool<- (((n1 - 1) * (sd1^2)) + ((n2 - 1) * (sd2^2)))/(n1 + n2 - 2)
-	h_g <- ((m1 - m2) / sqrt(sd_pool))
-	}
-return(h_g)
-}
-
-var_smd <- function(smd, n1, n2, type = c("d", "g")){
-	if(type == "g"){
-	J <- 1 - (3 / ((4 * (n1 + n2 - 2)) -1))
-	vg <- ((n1 + n2)/(n1 * n2)) + ((smd^2)/(2 * (n1 + n2 - 2)))
-	v <- vg * (J^2)
-	}
-
-	if(type == "d"){
-	v <- ((n1 + n2)/(n1 * n2)) + ((smd^2)/(2 * (n1 + n2 - 2)))
-	}
-return(v)
-}
-
-# calculate the pooled standard deviation
-sp <- function(sd1, sd2, n1, n2) {
- sp <- sqrt(((n1 - 1) * sd1^2 + (n2 - 1) * sd2^2) / (n1 + n2 - 2))
- return(sp)
-} 
-
-```
-
-
-# SMD with descriptive statistics
+For this type of data, we need to provide t and df, then they can use the two quantities to calculate r correct SE(r) and wrong SE(r).
 
 ```{r}
 library(here)
 library(dplyr)
 
 ft037_raw <- read.csv(here("data","ft037_raw.csv")) 
-ft037_raw <- ft037_raw[-1]
+ft037_raw <- ft037_raw[-1] # only keep necessary variables
 
-# calculate SMD and its sampling variance with small sample adjustment
-#ft037_raw <- ft037_raw %>% mutate(es = smd(m1=T_mean, m2=C_mean, sd1=T_sd, sd2=C_sd, n1=T_n, n2=C_n, type = "g"), var = var_smd(es, n1=T_n, n2=C_n, type = "g"))
+# calculate t according to its definition in two-sample test
+# https://www.statology.org/two-sample-t-test/
+tval <- function(n1, n2, sd1, sd2, m1, m2) { # function to calculate independent samples t-test
+  sdp <- ((n1 - 1) * sd1^2 + (n2 - 1) * sd2^2) / (n1 + n2 - 2) # calculate pooled SD
+  tval <- (m1 - m2) / (sdp * sqrt(1 / n1 + 1 / n2)) # test stat - https://www.statology.org/two-sample-t-test/
+  return(tval) 
+}
 
-ft037_raw <- metafor::escalc(measure = "SMD", m1i = T_mean, m2i = C_mean,sd1i = T_sd,sd2i = C_sd,n1i = T_n,n2i = C_n, data = ft037_raw)
-
-# recover t and df
-ft037_raw <- ft037_raw %>% mutate(t = yi/sqrt(vi), df = T_n + C_n - 2)
-
-
-
-
-
-# alternatively, we can calculate t according to its definition in two-sample test
-# calculate the standard error of the difference between the means
-ft037_raw <- ft037_raw %>% mutate(sp = sp(sd1=T_sd, sd2=C_sd, n1=T_n, n2=C_n), # calculate the pooled standard deviation
-                                  se = sp * sqrt(1/T_n + 1/C_n), # calculate the standard error of the difference between the means # https://www.statology.org/two-sample-t-test/
-                                  t2 = (T_sd - C_sd) / se, # calculate the t-value 
-                                  df2 = T_n + C_n - 2 # calculate the degrees of freedom
+# compute t
+ft037_raw <- ft037_raw %>% mutate(t = tval(n1=T_n, n2=C_n, sd1=T_sd, sd2=C_sd, m1=T_mean, m2=C_mean), # t
+                                  df = T_n + C_n - 2, # degrees of freedom
                                   )
 
 
@@ -83,206 +39,41 @@ ft037_raw <- ft037_raw %>% mutate(sp = sp(sd1=T_sd, sd2=C_sd, n1=T_n, n2=C_n), #
 
 # SMD without descriptive statistics
 
+For this type of data, we need to convert SMD into r and approximate df based on var(SMD). Then they can use the two quantities to calculate r correct SE(r) and wrong SE(r).
+
 ```{r}
-ft056_processed <- read.csv(here("data","ft056_processed.csv")) 
-ft056_processed <- ft056_processed[-1]
+ft056_precalculated <- read.csv(here("data","ft056_processed.csv")) 
+ft056_precalculated <- ft056_precalculated[-1] # only keep necessary variables
 
-# recover t and df, assuming equal sample size between two groups
-ft056_processed <- ft056_processed %>% mutate(t = es/sqrt(var), df = (8 + es^2)/(4*var) - 2)
+# convert SMD into r
+ft056_precalculated <- ft056_precalculated %>% mutate(r = es / sqrt(es^2 + 4)) # appendix A - https://onlinelibrary.wiley.com/doi/full/10.4073/cmpn.2016.3
 
+# approximate df based on the formula of var(SMD), assuming equal sample size between two groups
+ft056_precalculated <- ft056_precalculated %>% mutate(n = (8 + es^2)/(4*var), # n = sample size of each group within each study
+                                                      df = 2*n - 2)
+
+
+
+#ft056_precalculated <- ft056_precalculated %>% mutate(t = es*sqrt(n) / 2) # t appendix C - https://onlinelibrary.wiley.com/doi/full/10.4073/cmpn.2016.3
 
 ```
 
 
 # Zr
 
+For this type of data, we need to convert Zr into r and calculate df based on var(Zr). Then they can use the two quantities to calculate r correct SE(r) and wrong SE(r).
+
 ```{r}
 ft012 <- read.csv(here("data","ft012.csv")) 
-ft012  <- ft012[-1]
+ft012  <- ft012[-1] # keep relevant variables
 
-# recover t and df
-ft056_processed <- ft056_processed %>% mutate(t = es/sqrt(var), df = 1/var + 3 - 2)
+# calculate n based on Var(Zr)
+ft012 <- ft012 %>% mutate(n = 1/var + 3, # sample size of each study
+                          df = n - 2)
 
-
-# alternatively, convert Zr into r and then calculate t
-ft056_processed <- ft056_processed %>% 
-  mutate(r = (exp(2*es) - 1)/(1 + exp(2*es)),
-         es2 = 0.5*log((1+r)/(1-r)),
-         N = 1/var + 3) %>%
-  mutate(var_r = (1 - r^2)^2 / (N - 1),
-         t2 = r / sqrt(var_r) * sqrt(N - 2), 
-         df2 = N - 2)
-                                              
-
-```
-
-
-
-
-
-
-
-# Ignore the following stuff
-Using R to identify author clusters
-
-```{r}
-library(igraph)
-g <- make_full_graph(5) %du% make_full_graph(5) %du% make_full_graph(5)
-g <- add_edges(g, c(1, 6, 1, 11, 6, 11))
-plot(g)
-
-wtc <- cluster_walktrap(g)
-modularity(wtc)
-modularity(g, membership(wtc))
-
-plot(wtc, g)
-
-wtc <- cluster_louvain(g, weights = NULL, resolution = 1)
-plot(wtc, g)
-
-communities(wtc)
-
-# read .gephi format # https://gvegayon.github.io/rgexf/
-library(rgexf)
-g <- system.file("C:/Users/86188/Dropbox/Coauthor_papers/pcc_correlation/es_conversion/A-Chen.gephi", package="rgexf")
-g <- read.gexf(g)
-
-net <- read.gexf("C:/Users/86188/Dropbox/Coauthor_papers/pcc_correlation/es_conversion/A-Chen.gephi")
-
-read.graph("A-Chen.gephi", format = "graphml")
-
-```
-
-
-
-https://ardata-fr.github.io/flextable-book/default-settings.html
-https://stackoverflow.com/questions/70139600/export-flextable-to-word-in-r
-```{r}
-library(metafor)
-library(flextable)
-
-# Load data
-data(dat.bcg)
-dat.bcg$alloc <- as.factor(dat.bcg$alloc)
-
-# mixed-effects model with alloc as a moderator
-res <- rma(ai=tpos, bi=tneg, ci=cpos, di=cneg, 
-           mods= ~ I(alloc) - 1, measure="RR", data=dat.bcg, method="DL", test = "t")
-
-# Extract model estimates
-estimates <- data.frame(
-  Coefficient = c("Intercept", "Slope"),
-  Estimate = res$beta[1],
-  `95% CI` = res$ci.lb[1],
-  `p-value` = format.pval(res$pval, eps = 0.001, digits = 2)[1],
-  stringsAsFactors = FALSE
-)
-
-mod = res
-
-mod_table <- function(mod){
-  beta <- data.frame(round(mod$b,3),row.names = row.names(mod$b))
-  CI <- data.frame(sprintf("[%0.3f, %0.3f]", mod$ci.lb, mod$ci.ub))
-  t <- data.frame(mod$zval)
-  df <- cbind(beta,CI,t)
-  names(df) <- c("Estimate","95% CI","t")
-  return(df)
-  #return(db.mf[,c("estimate","mean","lower","upper")])
-  
-}
-
-ft <- mod_table(res)
-ft <- tibble::rownames_to_column(ft, "Coefficient")
-
-
-ft %>% flextable() %>% 
-   mk_par(j = 2, part = "header", value = as_paragraph(as_i("β"), as_sub("0"))) %>%
-   mk_par(j = 4, part = "header", value = as_paragraph(as_i("t"), as_sub(res$QMdf[2]))) %>% 
-   colformat_double(j = 4, digits = 3) %>%
-  autofit()
-
-
-# formula example - https://www.ardata.fr/en/flextable-gallery/2021-05-05-columns-names-with-mathjax/
-
-ft <- data.frame(
-  `\\beta_0` = rep(-1, 4),
-  `\\beta_1` = rep(1, 4),
-  `X_i` = c(2, 1, 0, -1),
-  `p` = runif(4), check.names = FALSE) %>% 
-  flextable()  %>% 
-  mk_par(i = 1, part = "header",
-         value = flextable::as_paragraph(
-           flextable::as_equation(.,width = .1, height = .2)),
-         use_dot = TRUE) |> 
-  autofit()
-
-
-estimates.CI <- function(model){
-  db.mf <- data.frame(round(model$b,3),row.names = 1:nrow(model$b))
-  db.mf <- cbind(db.mf,round(model$ci.lb,3),round(model$ci.ub,3),row.names(model$b))
-  names(db.mf) <- c("mean","lower","upper","estimate")
-  return(db.mf[,c("estimate","mean","lower","upper")])
-}
-
-
-# Create table using flextable
-tbl <- flextable(estimates) %>%
-  set_caption("Meta-Regression Model Estimates") %>%
-  align(align = "center", part = "all") %>%
-  autofit()
-
-# Save table to a file
-save_as_docx("my table 1" = tbl, "my table 2" = tbl, path ="meta-regression-estimates.docx") # https://ardata-fr.github.io/flextable-book/rendering.html
-
-print(tbl, preview = "docx")
-
-as_flextable(res)
-
-
-# example
-ft <- flextable(airquality[sample.int(10),])
-ft <- add_header_row(ft,
-  colwidths = c(2, 2,2),
-  values = c("Air quality", "Time","A")
-)
-
-ft <- theme_vanilla(ft)
-
-
-flextable(
-  data = head(airquality), 
-  col_keys = c("Ozone", "Solar.R", "col1", "Month", "Day")) %>%  
-  width(j = "col1", width = .5) %>% 
-  empty_blanks()
-
-
-# data prep ----
-z <- data.table::as.data.table(ggplot2::diamonds)
-z <- z[, list(
-  price = mean(price, na.rm = TRUE),
-  list_col = list(.SD$x)
-), by = "cut"]
-
-# flextable ----
-ft <- flextable(data = z) %>%
-  mk_par(j = "list_col", value = as_paragraph(
-    plot_chunk(value = list_col, type = "dens", col = "#ec11c2", 
-               width = 1.5, height = .4, free_scale = TRUE)
-  )) %>%
-  colformat_double(big.mark = " ", suffix = " $") %>% 
-  set_header_labels(box = "composite content", density = "density") %>% 
-  autofit()
-ft
-
-# 95% confidence intervals
-# create a data frame with the confidence interval
-conf_int <- data.frame(lower = 0.75, upper = 0.85)
-
-# format the confidence interval as a string
-conf_int_str <- sprintf("[%0.2f, %0.2f]", conf_int$lower, conf_int$upper)
-
-# create a flextable and insert the confidence interval
-ft <- flextable(data.frame(value = 0.8, conf_interval = conf_int_str))
+# convert Zr into r
+ft012 <- ft012 %>% mutate(r = (exp(2*es) - 1)/(1 + exp(2*es)), # from Zr to r
+                          es2 = 0.5*log((1+r)/(1-r))) # from r to Zr to double-check
 
 ```
 
