@@ -25,7 +25,7 @@ tval <- function(n1, n2, sd1, sd2, m1, m2) { # function to calculate independent
 
 Raw data mean the original authors used lnRR or SMD as effect size measure in their publications.
 
-For this type of data, t and df can be calculated from raw data. Then your can use the two quantities to calculate pcc, correct and wrong SE(pcc) as you like.
+For this type of data, t and df can be calculated from raw data. Then you can use the two quantities to calculate pcc, correct and wrong SE(pcc) as you like.
 
 ```{r}
 # lnRR 
@@ -39,7 +39,6 @@ for (i in 1:length(dat_r_lnRR)) {
                                   df = T_n + C_n - 2)  %>% list()}
 
 saveRDS(dat_r_lnRR_list, file = "data/converted/dat_r_lnRR_list.RDS")
-#readRDS(here("data/converted","dat_r_lnRR_list.RDS"))
 
 
 # SMD 
@@ -87,17 +86,6 @@ Zr data mean the original authors used Zr as effect measure in their publication
 For this type of data, Zr can be back-transformed into pcc and df can be calculated based on var(Zr). Note that pcc and df from Zr are exactly calculated rather than approximated. With the two quantities, you can calculate calculate correct and wrong SE(pcc) as you like.
 
 ```{r}
-ft012 <- read.csv(here("data","ft012.csv")) 
-ft012  <- ft012[-1] # keep relevant variables
-
-# calculate n based on Var(Zr)
-ft012 <- ft012 %>% mutate(n = 1/var + 3, # sample size of each study
-                          df = n - 2)
-
-# convert Zr into r
-ft012 <- ft012 %>% mutate(r = (exp(2*es) - 1)/(1 + exp(2*es)), # from Zr to r
-                          es2 = 0.5*log((1+r)/(1-r))) # from r to Zr to double-check
-
 dat_p_Zr <- suppressMessages(list.files(here("data/Zr"), pattern = "*.csv", full.names = TRUE) %>% lapply(read_csv))
 
 # calculate t and df
