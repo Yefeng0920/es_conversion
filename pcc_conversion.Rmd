@@ -5,63 +5,86 @@ author: "Yefeng Yang and Shinichi Nakagawa"
 date: '2023-02-24'
 ---
 
-# Resources
-https://easystats.github.io/effectsize/reference/t_to_r.html
-https://onlinelibrary.wiley.com/doi/full/10.4073/cmpn.2016.3
-
-# Raw data (SMD and lnRR) with descriptive statistics
-
-For this type of data, we need to provide t and df, then they can use the two quantities to calculate r correct SE(r) and wrong SE(r).
+# Packages and function
 
 ```{r}
 library(here)
 library(dplyr)
-
-ft037_raw <- read.csv(here("data","ft037_raw.csv")) 
-ft037_raw <- ft037_raw[-1] # only keep necessary variables
+library(readr)
 
 # calculate t according to its definition in two-sample test
-# https://www.statology.org/two-sample-t-test/
 tval <- function(n1, n2, sd1, sd2, m1, m2) { # function to calculate independent samples t-test
   sdp <- ((n1 - 1) * sd1^2 + (n2 - 1) * sd2^2) / (n1 + n2 - 2) # calculate pooled SD
-  tval <- (m1 - m2) / (sdp * sqrt(1 / n1 + 1 / n2)) # test stat - https://www.statology.org/two-sample-t-test/
+  tval <- (m1 - m2) / (sdp * sqrt(1 / n1 + 1 / n2)) 
   return(tval) 
 }
-
-# compute t
-ft037_raw <- ft037_raw %>% mutate(t = tval(n1=T_n, n2=C_n, sd1=T_sd, sd2=C_sd, m1=T_mean, m2=C_mean), # t
-                                  df = T_n + C_n - 2, # degrees of freedom
-                                  )
-
-
 ```
 
 
-# SMD without descriptive statistics
+# lnRR and SMD datasets with raw data (i.e., mean, sd, n)
 
-For this type of data, we need to convert SMD into r and approximate df based on var(SMD). Then they can use the two quantities to calculate r correct SE(r) and wrong SE(r).
+Raw data mean the original authors used lnRR or SMD as effect size measure in their publications.
+
+For this type of data, t and df can be calculated from raw data. Then your can use the two quantities to calculate pcc, correct and wrong SE(pcc) as you like.
 
 ```{r}
-ft056_precalculated <- read.csv(here("data","ft056_processed.csv")) 
-ft056_precalculated <- ft056_precalculated[-1] # only keep necessary variables
+# lnRR 
+dat_r_lnRR <- suppressMessages(list.files(here("data/lnRR/des_stat"), pattern = "*.csv", full.names = TRUE) %>% lapply(read_csv))
 
-# convert SMD into r
-ft056_precalculated <- ft056_precalculated %>% mutate(r = es / sqrt(es^2 + 4)) # appendix A - https://onlinelibrary.wiley.com/doi/full/10.4073/cmpn.2016.3
+# calculate t and df
+dat_r_lnRR_list <- list(NULL)
+for (i in 1:length(dat_r_lnRR)) {
+  dat_r_lnRR_list[i] <- dplyr::select(dat_r_lnRR[[i]], study_ID, T_mean, C_mean, T_sd, C_sd, T_n, C_n) %>% list() # keep useful variables
+  dat_r_lnRR_list[i] <- mutate(dat_r_lnRR_list[[i]], t = tval(n1=T_n, n2=C_n, sd1=T_sd, sd2=C_sd, m1=T_mean, m2=C_mean), # calculate t according to its definition in independent t test
+                                  df = T_n + C_n - 2)  %>% list()}
 
-# approximate df based on the formula of var(SMD), assuming equal sample size between two groups
-ft056_precalculated <- ft056_precalculated %>% mutate(n = (8 + es^2)/(4*var), # n = sample size of each group within each study
-                                                      df = 2*n - 2)
+saveRDS(dat_r_lnRR_list, file = "data/converted/dat_r_lnRR_list.RDS")
+#readRDS(here("data/converted","dat_r_lnRR_list.RDS"))
 
 
+# SMD 
+dat_r_SMD <- suppressMessages(list.files(here("data/SMD/des_stat"), pattern = "*.csv", full.names = TRUE) %>% lapply(read_csv))
 
-#ft056_precalculated <- ft056_precalculated %>% mutate(t = es*sqrt(n) / 2) # t appendix C - https://onlinelibrary.wiley.com/doi/full/10.4073/cmpn.2016.3
+# calculate t and df
+dat_r_SMD_list <- list(NULL)
+for (i in 1:length(dat_r_SMD)) {
+  dat_r_SMD_list[i] <- dplyr::select(dat_r_SMD[[i]], study_ID, T_mean, C_mean, T_sd, C_sd, T_n, C_n) %>% list() # keep useful variables
+  dat_r_SMD_list[i] <- mutate(dat_r_SMD_list[[i]], t = tval(n1=T_n, n2=C_n, sd1=T_sd, sd2=C_sd, m1=T_mean, m2=C_mean), # calculate t according to its definition in independent t test
+                                  df = T_n + C_n - 2)  %>% list()}
+saveRDS(dat_r_SMD_list, file = "data/converted/dat_r_SMD_list.RDS")
 
 ```
 
 
-# Zr
+# SMD datasets with pre-calculated effect sizes
 
-For this type of data, we need to convert Zr into r and calculate df based on var(Zr). Then they can use the two quantities to calculate r correct SE(r) and wrong SE(r).
+Pre-calculated effect sizes data mean the original authors provided only effect size estimates and corresponding sampling variances in their publications. 
+
+For this type of data, only SMD is possible to be converted into pcc and df. Note that pcc and df are approximated assuming that the equal designs (n1 = n2) were used in the studies. With the two quantities, you can calculate calculate correct and wrong SE(pcc) as you like.
+
+```{r}
+dat_p_SMD <- suppressMessages(list.files(here("data/SMD"), pattern = "*.csv", full.names = TRUE) %>% lapply(read_csv))
+
+# calculate t and df
+dat_p_SMD_list <- list(NULL)
+for (i in 1:length(dat_p_SMD)) {
+  dat_p_SMD_list[i] <- dplyr::select(dat_p_SMD[[i]], study_ID, es, var) %>% list() # keep useful variables
+  dat_p_SMD_list[i] <- mutate(dat_p_SMD_list[[i]], pcc = es / sqrt(es^2 + 4)) %>% list() # convert d into pcc 
+  dat_p_SMD_list[i] <- mutate(dat_p_SMD_list[[i]], n = round((8 + es^2)/(4*var)), # n = sample size of each group within each study
+                               df = 2*n - 2) %>% list() # degrees of freedom
+  }
+
+saveRDS(dat_p_SMD_list, file = "data/converted/dat_p_SMD_list.RDS")
+
+
+```
+
+
+# Zr datasets
+
+Zr data mean the original authors used Zr as effect measure in their publications. 
+
+For this type of data, Zr can be back-transformed into pcc and df can be calculated based on var(Zr). Note that pcc and df from Zr are exactly calculated rather than approximated. With the two quantities, you can calculate calculate correct and wrong SE(pcc) as you like.
 
 ```{r}
 ft012 <- read.csv(here("data","ft012.csv")) 
@@ -74,6 +97,19 @@ ft012 <- ft012 %>% mutate(n = 1/var + 3, # sample size of each study
 # convert Zr into r
 ft012 <- ft012 %>% mutate(r = (exp(2*es) - 1)/(1 + exp(2*es)), # from Zr to r
                           es2 = 0.5*log((1+r)/(1-r))) # from r to Zr to double-check
+
+dat_p_Zr <- suppressMessages(list.files(here("data/Zr"), pattern = "*.csv", full.names = TRUE) %>% lapply(read_csv))
+
+# calculate t and df
+dat_p_Zr_list <- list(NULL)
+for (i in 1:length(dat_p_Zr)) {
+  dat_p_Zr_list[i] <- dplyr::select(dat_p_Zr[[i]], study_ID, es, var) %>% list() # keep useful variables
+  dat_p_Zr_list[i] <- mutate(dat_p_Zr_list[[i]], pcc = (exp(2*es) - 1)/(1 + exp(2*es))) %>% list() # convert Zr into pcc 
+  dat_p_Zr_list[i] <- mutate(dat_p_Zr_list[[i]], n = round(1/var + 3), # sample size of each study
+                          df = n - 2) %>% list() # degrees of freedom
+  }
+
+saveRDS(dat_p_Zr_list, file = "data/converted/dat_p_Zr_list.RDS")
 
 ```
 
