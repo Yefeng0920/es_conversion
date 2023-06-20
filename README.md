@@ -7,6 +7,7 @@ For datasets with raw data (mean, sd, n), the t values and df were exactly compu
 These include **dat_r_lnRR_list.RDS** (original effect measure was lnRR) and **dat_r_SMD_list.RDS** (original effect measure was SMD or *d* family).
 
 **Metadata:**
+
 *"study_ID"* - study identity
 
 *"T_mean"* - mean of the treatment group
@@ -33,6 +34,7 @@ The pcc and df were approximated for datasets using SMD the measure, assuming th
 These include **dat_p_SMD_list** (original effect measure was SMD or *d* family) and **dat_p_Zr_list** (original effect measure was *Zr*).
 
 **Metadata:**
+
 *"study_ID"* - study identity
 
 *"es"* - point estimate of the original effect size 
