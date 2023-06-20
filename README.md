@@ -1,2 +1,4 @@
 # es_conversion
-## convert different effect size measures into PCC
+Converted effect sizes can be found at ./data/converted:
+
+
