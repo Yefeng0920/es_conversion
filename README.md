@@ -1,5 +1,5 @@
 # Location
-Converted effect sizes can be found at ./data/converted:
+Converted effect sizes can be found at ./data/converted.
 
 # Raw data
 For datasets with raw data (mean, sd, n), the t values and df were exactly computed. The two quantities can be used to calculate pcc, correct and wrong SE(pcc) accordingly.
